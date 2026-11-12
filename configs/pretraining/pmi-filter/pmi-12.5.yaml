@@ -1,0 +1,86 @@
+seed_everything: 153201820
+trainer:
+  accumulate_grad_batches: 64
+  default_root_dir: "[model-dir]" # where you want the model to be saved
+  logger:
+    - class_path: lightning.pytorch.loggers.TensorBoardLogger
+      init_args:
+        save_dir: "tensorboard"
+        name: "[tensorboard-run-name]" # name for the tensorboard run
+  max_epochs: 1
+  log_every_n_steps: 20
+  val_check_interval: 1000
+  gradient_clip_val: 5.0
+  precision: "bf16-mixed"
+  accelerator: "gpu"
+  devices: 1
+  max_steps: -1
+model:
+  class_path: bertblocks.training.modules.BertBlocksPretrainingModule
+  init_args:
+    learning_rate: 8e-4
+    weight_decay: 1e-3
+    scheduler_warmup_steps: 1900
+    scheduler_warmup_decay: 0.1
+    scheduler_training_steps: 15273
+    scheduler_cooldown_kind: "inverse-sqrt"
+    scheduler_cooldown_steps: 1900
+    pretrained_tokenizer_name_or_path: ${data.init_args.pretrained_tokenizer_name_or_path}
+    compile_model: true
+    optimizer_class: "adamw"
+    optimizer_kwargs:
+      betas:
+        - 0.9
+        - 0.98
+      eps: 1e-10
+    model_config_kwargs:
+      "model_type": "modernbert"
+      hidden_size: 768
+      num_blocks: 22
+      num_attention_heads: 12
+      intermediate_size: 1152
+      actv_fn: "gelu"
+      norm_kind: "pre"
+      packing: true
+      norm_fn: "layer"
+      norm_bias: false
+      norm_qk: false
+      block_pos_enc_kind: "rope"
+      block_pos_enc_kwargs:
+        base_global: 160000
+        base_local: 10000
+      global_attention_every_n_layers: 3
+      local_attention: [128, 128]
+      max_sequence_length: ${data.init_args.max_sequence_length}
+      mlp_type: "glu"
+      mlp_in_bias: false
+      mlp_out_bias: false
+      attn_implementation: "flash_attention_2"
+      attn_proj_bias: false
+      attn_out_bias: false
+      norm_eps: 1e-06
+      vocab_size: 50368
+      attn_dropout_prob: 0.1
+      emb_dropout_prob: 0.0
+      hidden_dropout_prob: 0.0
+      pad_token_id: 50283
+      bos_token_id: 50281
+      tie_word_embeddings: true
+      head_type: "proj"
+data:
+  class_path: bertblocks.training.modules.BertBlocksPretrainingDataModule
+  init_args:
+    pretrained_tokenizer_name_or_path: "answerdotai/ModernBERT-base"
+    train_dataset_name_or_path: "DanielGallagherIRE/FineWeb-Edu-10B-PMI-Filtered"
+    train_split: "train"
+    text_column: "text_shannon_mi_12.5_default"
+    streaming: true
+    packing: true
+    # valid_split: "valid"
+    max_sequence_length: 2048
+    train_batch_size: 8 # effective batch size = 64 * 8 = 512
+    val_batch_size: 8
+    num_workers: 4
+    shuffle: false
+    collator_kwargs:
+      mlm_probability: 0.3
